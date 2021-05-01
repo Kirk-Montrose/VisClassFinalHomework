@@ -4,6 +4,7 @@ library(mlr)
 library(kknn)
 library(MuMIn)
 library(dplyr)
+library(glmnet)
 #library(caret)
 
 
@@ -12,29 +13,41 @@ TrainA <- read.csv("Data-Source/Train.csv")
 str(TrainA)
 summary(TrainA)
 
-TrainA$Sex <- factor(TrainA$Sex, levels=c(0,1),
+#Change sex data to ones and zeros 
+TrainA$Sex <- factor(TrainA$Sex, 
+                     levels=c(0,1),
                      labels=c("Female","Male"),
                      ordered=FALSE)
-TrainA$ChestPain <- factor(TrainA$ChestPain,levels=c(0,1,2,3),
+
+
+TrainA$ChestPain <- factor(TrainA$ChestPain,
+                           levels=c(0,1,2,3),
                            labels=c("Asymptomatic","Atypical Angina","Non-Anginal Pain","Typical Angina"),
                            ordered=FALSE)
+
 TrainA$FastingBloodSugar <- factor(TrainA$FastingBloodSugar,
                                    levels=c(0,1),labels = c("False","True"),
                                    ordered=FALSE)
+
 TrainA$RestECG <- factor(TrainA$RestECG, levels=c(0,1,2),
                          labels=c("LV Hypertrophy","Normal","Abnormalities"),
                          ordered=FALSE)
+
 TrainA$ExIndAng <- factor(TrainA$ExIndAng, levels=c(0,1),
                           labels=c("No","Yes"),
                           ordered=FALSE)
+
 TrainA$Slope <- factor(TrainA$Slope, levels=c(0,1,2),
                        labels=c("Descending","Flat","Ascending"),
                        ordered=FALSE)
+
 TrainA$ThalRate <- factor(TrainA$ThalRate, levels=c(1,2,3),
                           labels=c("Fixed Defect","Normal","Reversible Defect"),
                           ordered=FALSE)
+
 TrainA$MajorVessels <- factor(TrainA$MajorVessels,
                               levels=c(0,1,2,3))
+
 TrainA$Target <- factor(TrainA$Target,
                         levels=c(0,1),
                         labels = c("<50%",">50%"),
@@ -52,31 +65,31 @@ TrainB <- sample_frac(TrainA,size = 0.9,replace = FALSE)
 ValB <- setdiff(TrainA,Train)
 
 fit1 <- glm(data=TrainB, Target~., family="binomial")
-summary(fit1)
+summary(fit1)  #Do we need?
+
 fit_1_AIC <- AIC(fit1)
 fit_1_BIC <- BIC(fit1)
 
 ValB <- mutate(.data=ValB,Prediction1=predict(fit1, type="response",newdata = ValB))
-ValB <- mutate(.data=ValB,KindPred1=case_when(Prediction1>.5~">50%",
-                                              TRUE~"<50%"))
+ValB <- mutate(.data=ValB,KindPred1=case_when(Prediction1>.5~">50%",   TRUE~"<50%"))
+
 confusion1 <- table(ValB$Target,ValB$KindPred1,dnn=c("Actual","Predicted 1"))
 confusion1
-fit_1_Pred <- print(paste("Fraction of Fit1 Correct Predictions:",
-                          round((confusion1["<50%","<50%"]+confusion1[">50%",">50%"])/sum(confusion1),4)))
 
+fit_1_Pred <- print(paste("Fraction of Fit1 Correct Predictions:",round((confusion1["<50%","<50%"]+confusion1[">50%",">50%"])/sum(confusion1),4)))
 
 fit2 <- glm(data=TrainB, Target~Sex+ChestPain+RestingBloodPressure+MajorVessels+ThalRate, family="binomial")
-summary(fit2)
+print(summary(fit2))
+
 Fit_2_AIC <- AIC(fit2)
 Fit_2_BIC <- BIC(fit2)
 
 ValB <- mutate(.data=ValB,Prediction2=predict(fit2, type="response",newdata = ValB))
-ValB <- mutate(.data=ValB,KindPred2=case_when(Prediction2>.5~">50%",
-                                              TRUE~"<50%"))
+ValB <- mutate(.data=ValB,KindPred2=case_when(Prediction2>.5~">50%", TRUE~"<50%"))
+
 confusion2 <- table(ValB$Target,ValB$KindPred2,dnn=c("Actual","Predicted 2"))
-confusion2
-fit_2_Pred <- print(paste("Fraction of Fit2 Correct Predictions:",
-                          round((confusion2["<50%","<50%"]+confusion2[">50%",">50%"])/sum(confusion2),4)))
+
+fit_2_Pred <- print(paste("Fraction of Fit2 Correct Predictions:", round((confusion2["<50%","<50%"]+confusion2[">50%",">50%"])/sum(confusion2),4)))
 
 confusion1
 confusion2
