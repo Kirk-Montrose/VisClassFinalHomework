@@ -28,6 +28,7 @@ TrainA$ChestPain <- factor(TrainA$ChestPain,
 TrainA$FastingBloodSugar <- factor(TrainA$FastingBloodSugar,
                                    levels=c(0,1),labels = c("False","True"),
                                    ordered=FALSE)
+#lfhgiujdfhijg
 
 TrainA$RestECG <- factor(TrainA$RestECG, levels=c(0,1,2),
                          labels=c("LV Hypertrophy","Normal","Abnormalities"),
