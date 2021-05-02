@@ -42,18 +42,31 @@ fit_2_Pred <- print(paste("Fraction of Fit2 Correct Predictions:", round((confus
 
 ###Create a Lasso Model 
 
-x <- model.matrix(Target ~ ., TrainC)[, -1]  #We omit the intercept
-y <- TrainC$Target
+TrainD <- sample_frac(TrainC,size = 0.9,replace = FALSE) #Use 90% of the data 
+TestD  <- setdiff(TrainC,TrainD) # 
+
+x <- model.matrix(Target ~ ., TrainD)[, -1]  #We omit the intercept
+y <- TrainD$Target
 
 # Do cross validation to get the best lambda. This does k=10 CV
 cv.out <- cv.glmnet(x,y,alpha=1)
 plot(cv.out)
 (bestlam <- cv.out$lambda.min)
 
+# Compute MSE for the linear regression.
+fitlm<-lm(Target~., data=TrainD)
+lmpred<-predict(fitlm, newdata = TestD)
+(MSElm<-mean((lmpred-TestD$Target)^2))
+
+# Compute the MSE for the Lasso
+xTest<-model.matrix(Target ~ ., TestD)[, -1]
+yTest<-TestD$Target
+
 # Run the Lasso
 lasso.mod <- glmnet(x, y, alpha=1, lambda=bestlam)
 lasso.pred <- predict(lasso.mod, newx=xTest,s=bestlam, exact = T)
-(MSElasso<-mean((lasso.pred-TestSet$Target)^2))
+(MSElasso<-mean((lasso.pred-Test$Target)^2))
+
 
 ###########
 ### MLR ###
@@ -88,3 +101,4 @@ kfoldCVKKNN<-resample(learner=makeLearner("classif.kknn"), classifTask, resampli
 CMKKNN<-calculateConfusionMatrix(kfoldCVKKNN$pred)
 AccuracyKKNN <- (CMKKNN$result[1]+CMKKNN$result[5])/(CMKKNN$result[1]+CMKKNN$result[2] +CMKKNN$result[4]+CMKKNN$result[5])
 print('Finished :)')
+
