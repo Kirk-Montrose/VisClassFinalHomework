@@ -23,6 +23,7 @@ TrainA$ThalRate           <- factor(TrainA$ThalRate, levels=c(1,2,3),labels=c("F
 TrainA$MajorVessels       <- factor(TrainA$MajorVessels,levels=c(0,1,2,3))
 TrainA$Target             <- factor(TrainA$Target,levels=c(0,1),labels = c("<50%",">50%"),ordered = FALSE)
 
+#TrainC$Target             <- factor(TrainA$Target,levels=c(0,1),labels = c("<50%",">50%"),ordered = FALSE)
 # Training and Validation Sets:
 set.seed(18)
 Train <- sample_frac(TrainA,size = 0.9,replace = FALSE) #Use 90% of the data 
@@ -30,17 +31,11 @@ Test  <- setdiff(TrainA,Train) #
 
 #Create Binomial Model
 fit1 <- glm(data=Train, Target~., family="binomial");fit_1_AIC <- AIC(fit1);fit_1_BIC <- BIC(fit1)
-ValB <- mutate(.data=Train,Prediction_Binomal_Fulldata=predict(fit1, type="response",newdata = Train))
-ValB <- mutate(.data=ValB,KindPred1=case_when(Prediction_Binomal_Fulldata>.5~">50%",TRUE~"<50%"))
+ValB <- mutate(.data=Test,Binnomial=predict(fit1, type="response",newdata = Test))
+ValB <- mutate(.data=ValB,Binnomial=case_when(Binnomial>.5~">50%",TRUE~"<50%"))
 
-confusion1 <- table(ValB$Target,ValB$KindPred1,dnn=c("Actual","Prediction_Binomal_Fulldata"))
+confusion1 <- table(ValB$Target,ValB$Binnomial,dnn=c("Actual","Prediction_Binomal_Fulldata"))
 fit_1_Pred <- print(paste("Fraction of Fit1 Correct Predictions:", round((confusion1["<50%","<50%"]+confusion1[">50%",">50%"])/sum(confusion1),4)))
-
-fit2 <- glm(data=Train, Target~Sex+ChestPain+RestingBloodPressure+MajorVessels+ThalRate, family="binomial");Fit_2_AIC <- AIC(fit2);Fit_2_BIC <- BIC(fit2)
-ValB <- mutate(.data=Train,Prediction_Binomal_PartialData=predict(fit2, type="response",newdata = Train))
-ValB <- mutate(.data=ValB,KindPred2=case_when(Prediction_Binomal_PartialData>.5~">50%", TRUE~"<50%"))
-confusion2 <- table(ValB$Target,ValB$KindPred2,dnn=c("Actual","Prediction_Binomal_PartialData"))
-fit_2_Pred <- print(paste("Fraction of Fit2 Correct Predictions:", round((confusion2["<50%","<50%"]+confusion2[">50%",">50%"])/sum(confusion2),4)))
 
 ###Create a Lasso Model 
 
@@ -55,15 +50,18 @@ y <- TrainD$Target
 
 #Regression Tree
 fitControl <- trainControl(method="cv", number=10)
-
 model.tree <- train(Target ~ ., data = TrainD,method = "rpart",  trControl = fitControl)
 tree.pred <- predict(model.tree, newdata = TestD)
+ValB$TreeTest <- tree.pred 
+ValB <- mutate(.data=ValB,TreeTest=case_when(TreeTest>.5~">50%",TRUE~"<50%"))
+
+confusion2 <- table(ValB$Target,ValB$TreeTest,dnn=c("Actual","Predicted"))
+fit_2_Pred <- print(paste("Fraction of Fit2 Correct Predictions:", round((confusion2["<50%","<50%"]+confusion2[">50%",">50%"])/sum(confusion2),4)))
 
 (MSEtree<-mean((tree.pred-TestD$Target)^2))
+
 #Each node terminal node should have 5 obs at least
 #Each parent node should have at least 10
-
-
 
 # Do cross validation to get the best lambda. This does k=10 CV
 cv.out <- cv.glmnet(x,y,alpha=1)
@@ -87,6 +85,12 @@ yFinalPreds<-TestD$Target
 #======================Run the Lasso======================
 lasso.mod <- glmnet(x, y, alpha=1, lambda=bestlam)
 lasso.pred <- predict(lasso.mod, newx=xTest,s=bestlam, exact = T)
+
+ValB$LassoTest <- lasso.pred
+ValB <- mutate(.data=ValB,LassoTest=case_when(LassoTest>.5~">50%",TRUE~"<50%"))
+confusion3 <- table(ValB$Target,ValB$LassoTest,dnn=c("Actual","Predicted"))
+fit_3_Pred <- print(paste("Fraction of Fit 3 Correct Predictions:", round((confusion3["<50%","<50%"]+confusion3[">50%",">50%"])/sum(confusion3),4)))
+
 lasso.pred1 <- predict(lasso.mod, newx=xFinalPreds,s=bestlam, exact = T)
 
 (MSElasso<-mean((lasso.pred-TestD$Target)^2))
@@ -96,11 +100,9 @@ TestD$TreePredValues <- tree.pred #Attach back to the
 TestD <- mutate(.data=TestD,LassoPredValues=case_when(LassoPredValues>.5~1, TRUE~0))
 TestD <- mutate(.data=TestD,TreePredValues=case_when(TreePredValues>.5~1, TRUE~0))
 
-confusion3 <- table(TestD$Target,TestD$LassoPredValues,dnn=c("Actual","Prediction"))
-confusion4 <- table(TestD$Target,TestD$TreePredValues,dnn=c("Actual","Prediction"))
-
+fourfoldplot(confusion1, color = c("#CC6666", "#99CC99"), conf.level = 0, margin = 1, main = "Confusion Matrix Top Attributes")
+fourfoldplot(confusion2, color = c("#CC6666", "#99CC99"), conf.level = 0, margin = 1, main = "Confusion Matrix Top Attributes")
 fourfoldplot(confusion3, color = c("#CC6666", "#99CC99"), conf.level = 0, margin = 1, main = "Confusion Matrix Top Attributes")
-fourfoldplot(confusion4, color = c("#CC6666", "#99CC99"), conf.level = 0, margin = 1, main = "Confusion Matrix Top Attributes")
 
 
 ###########
