@@ -5,13 +5,14 @@ library(kknn)
 library(MuMIn)
 library(dplyr)
 library(glmnet)
+library(randomForest)
 #library(caret)
 
 TrainA <- read.csv("Data-Source/Train.csv")
 TrainC <- TrainA
 TestSet <- read.csv("Data-Source/Test.csv")#Testing set to extract full data 
 
-#Switching information 
+#Switching information With Data
 TrainA$Sex                <- factor(TrainA$Sex, levels=c(0,1), labels=c("Female","Male"),   ordered=FALSE)
 TrainA$ChestPain          <- factor(TrainA$ChestPain,  levels=c(0,1,2,3), labels=c("Asymptomatic","Atypical Angina","Non-Anginal Pain","Typical Angina"),  ordered=FALSE)
 TrainA$FastingBloodSugar  <- factor(TrainA$FastingBloodSugar,  levels=c(0,1),labels = c("False","True"),      ordered=FALSE)
@@ -31,6 +32,7 @@ Test  <- setdiff(TrainA,Train) #
 fit1 <- glm(data=Train, Target~., family="binomial");fit_1_AIC <- AIC(fit1);fit_1_BIC <- BIC(fit1)
 ValB <- mutate(.data=Train,Prediction_Binomal_Fulldata=predict(fit1, type="response",newdata = Train))
 ValB <- mutate(.data=ValB,KindPred1=case_when(Prediction_Binomal_Fulldata>.5~">50%",TRUE~"<50%"))
+
 confusion1 <- table(ValB$Target,ValB$KindPred1,dnn=c("Actual","Prediction_Binomal_Fulldata"))
 fit_1_Pred <- print(paste("Fraction of Fit1 Correct Predictions:", round((confusion1["<50%","<50%"]+confusion1[">50%",">50%"])/sum(confusion1),4)))
 
@@ -48,6 +50,21 @@ TestD  <- setdiff(TrainC,TrainD) #
 x <- model.matrix(Target ~ ., TrainD)[, -1]  #We omit the intercept
 y <- TrainD$Target
 
+
+### Create Tree Model
+
+#Regression Tree
+fitControl <- trainControl(method="cv", number=10)
+
+model.tree <- train(Target ~ ., data = TrainD,method = "rpart",  trControl = fitControl)
+tree.pred <- predict(model.tree, newdata = TestD)
+
+(MSEtree<-mean((tree.pred-TestD$Target)^2))
+#Each node terminal node should have 5 obs at least
+#Each parent node should have at least 10
+
+
+
 # Do cross validation to get the best lambda. This does k=10 CV
 cv.out <- cv.glmnet(x,y,alpha=1)
 plot(cv.out)
@@ -59,20 +76,31 @@ fitlm<-lm(Target~., data=TrainD)
 lmpred<-predict(fitlm, newdata = TestD)
 (MSElm<-mean((lmpred-TestD$Target)^2))
 
-
-
-
 # Compute the MSE for the Lasso
 xTest<-model.matrix(Target ~ ., TestD)[, -1]
 yTest<-TestD$Target
 
-# Run the Lasso
+#Create Predictions for Actual Test
+xFinalPreds<-model.matrix( ~ ., TestSet)[, -1]
+yFinalPreds<-TestD$Target
+
+#======================Run the Lasso======================
 lasso.mod <- glmnet(x, y, alpha=1, lambda=bestlam)
 lasso.pred <- predict(lasso.mod, newx=xTest,s=bestlam, exact = T)
-(MSElasso<-mean((lasso.pred-Test$Target)^2))
+lasso.pred1 <- predict(lasso.mod, newx=xFinalPreds,s=bestlam, exact = T)
 
+(MSElasso<-mean((lasso.pred-TestD$Target)^2))
 
-#
+TestD$LassoPredValues <- lasso.pred #Attach back to the 
+TestD$TreePredValues <- tree.pred #Attach back to the 
+TestD <- mutate(.data=TestD,LassoPredValues=case_when(LassoPredValues>.5~1, TRUE~0))
+TestD <- mutate(.data=TestD,TreePredValues=case_when(TreePredValues>.5~1, TRUE~0))
+
+confusion3 <- table(TestD$Target,TestD$LassoPredValues,dnn=c("Actual","Prediction"))
+confusion4 <- table(TestD$Target,TestD$TreePredValues,dnn=c("Actual","Prediction"))
+
+fourfoldplot(confusion3, color = c("#CC6666", "#99CC99"), conf.level = 0, margin = 1, main = "Confusion Matrix Top Attributes")
+fourfoldplot(confusion4, color = c("#CC6666", "#99CC99"), conf.level = 0, margin = 1, main = "Confusion Matrix Top Attributes")
 
 
 ###########
@@ -99,7 +127,7 @@ CMLAS <- calculateConfusionMatrix(kfoldCVLAS$pred)
 AccuracyLAS <- (CMLAS$result[1]+CMLAS$result[5])/(CMLAS$result[1]+CMLAS$result[2]+CMLAS$result[4]+CMLAS$result[5])
 
 #### Random Forest, K=10 ####
-kfoldCVRF<-resample(learner=makeLearner("classif.rpart"),   classifTask,     resampling = kfold,show.info = FALSE)
+kfoldCVRF<-resample(learner=makeLearner("classif.rpart"), classifTask, resampling = kfold,show.info = FALSE)
 CMRF <- calculateConfusionMatrix(kfoldCVRF$pred)
 AccuracyRF <- (CMRF$result[1]+CMRF$result[5])/(CMRF$result[1]+CMRF$result[2]+ CMRF$result[4]+CMRF$result[5])
 
@@ -108,4 +136,3 @@ kfoldCVKKNN<-resample(learner=makeLearner("classif.kknn"), classifTask, resampli
 CMKKNN<-calculateConfusionMatrix(kfoldCVKKNN$pred)
 AccuracyKKNN <- (CMKKNN$result[1]+CMKKNN$result[5])/(CMKKNN$result[1]+CMKKNN$result[2] +CMKKNN$result[4]+CMKKNN$result[5])
 print('Finished :)')
-
