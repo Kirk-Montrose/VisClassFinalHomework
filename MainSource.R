@@ -55,8 +55,12 @@ plot(cv.out)
 
 # Compute MSE for the linear regression.
 fitlm<-lm(Target~., data=TrainD)
+
 lmpred<-predict(fitlm, newdata = TestD)
 (MSElm<-mean((lmpred-TestD$Target)^2))
+
+
+
 
 # Compute the MSE for the Lasso
 xTest<-model.matrix(Target ~ ., TestD)[, -1]
@@ -66,6 +70,9 @@ yTest<-TestD$Target
 lasso.mod <- glmnet(x, y, alpha=1, lambda=bestlam)
 lasso.pred <- predict(lasso.mod, newx=xTest,s=bestlam, exact = T)
 (MSElasso<-mean((lasso.pred-Test$Target)^2))
+
+
+#
 
 
 ###########
